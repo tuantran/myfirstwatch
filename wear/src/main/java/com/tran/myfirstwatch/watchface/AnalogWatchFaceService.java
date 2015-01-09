@@ -27,9 +27,12 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.AsyncTask;
+import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.support.wearable.provider.WearableCalendarContract;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
@@ -44,7 +47,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Sample analog watch face with a ticking second hand. In ambient mode, the second hand isn't
- * shown. On devices with low-bit ambient mode, the hands are drawn without anti-aliasing in ambient
+ * shown. On devices with low-bit ambient mode, theandroid wear getting battery level source code hands are drawn without anti-aliasing in ambient
  * mode. The watch face is drawn with less contrast in mute mode.
  *
  */
@@ -71,6 +74,9 @@ public class AnalogWatchFaceService extends CanvasWatchFaceService {
         Paint mTickPaint;
         boolean mMute;
         Time mTime;
+        int mNumBatteryLevel;
+
+        private AsyncTask<Void, Void, Integer> mBatteryTask;
 
         /** Handler to update the time once a second in interactive mode. */
         final Handler mUpdateTimeHandler = new Handler() {
@@ -86,6 +92,9 @@ public class AnalogWatchFaceService extends CanvasWatchFaceService {
                             long timeMs = System.currentTimeMillis();
                             long delayMs = INTERACTIVE_UPDATE_RATE_MS
                                     - (timeMs % INTERACTIVE_UPDATE_RATE_MS);
+                            if (Log.isLoggable(TAG, Log.DEBUG)) {
+                                Log.d(TAG, "delay in ms: " + delayMs);
+                            }
                             mUpdateTimeHandler.sendEmptyMessageDelayed(MSG_UPDATE_TIME, delayMs);
                         }
                         break;
@@ -93,11 +102,12 @@ public class AnalogWatchFaceService extends CanvasWatchFaceService {
             }
         };
 
-        final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
+        final BroadcastReceiver mBroadCastReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                mTime.clear(intent.getStringExtra("time-zone"));
-                mTime.setToNow();
+                if (Log.isLoggable(TAG, Log.DEBUG)) {
+                    Log.d(TAG, "reiving inside brodcastreceiver: ");
+                }
             }
         };
         boolean mRegisteredTimeZoneReceiver = false;
@@ -274,39 +284,24 @@ public class AnalogWatchFaceService extends CanvasWatchFaceService {
         public void onVisibilityChanged(boolean visible) {
             super.onVisibilityChanged(visible);
             if (Log.isLoggable(TAG, Log.DEBUG)) {
-                Log.d(TAG, "onVisibilityChanged: " + visible);
+                Log.d(TAG, "onVisibilityChanged 1: " + visible);
             }
 
             if (visible) {
-                registerReceiver();
+                IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+                Intent batteryStatus = registerReceiver(mBroadCastReceiver, ifilter);
 
-                // Update time zone in case it changed while we weren't visible.
-                mTime.clear(TimeZone.getDefault().getID());
-                mTime.setToNow();
-            } else {
-                unregisterReceiver();
+                Integer level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+                if (Log.isLoggable(TAG, Log.DEBUG)) {
+                    Log.d(TAG, "battery level: " + level);
+                }
+            }
+            else {
             }
 
             // Whether the timer should be running depends on whether we're visible (as well as
             // whether we're in ambient mode), so we may need to start or stop the timer.
             updateTimer();
-        }
-
-        private void registerReceiver() {
-            if (mRegisteredTimeZoneReceiver) {
-                return;
-            }
-            mRegisteredTimeZoneReceiver = true;
-            IntentFilter filter = new IntentFilter(Intent.ACTION_TIMEZONE_CHANGED);
-            AnalogWatchFaceService.this.registerReceiver(mTimeZoneReceiver, filter);
-        }
-
-        private void unregisterReceiver() {
-            if (!mRegisteredTimeZoneReceiver) {
-                return;
-            }
-            mRegisteredTimeZoneReceiver = false;
-            AnalogWatchFaceService.this.unregisterReceiver(mTimeZoneReceiver);
         }
 
         /**
@@ -330,6 +325,7 @@ public class AnalogWatchFaceService extends CanvasWatchFaceService {
         private boolean shouldTimerBeRunning() {
             return isVisible() && !isInAmbientMode();
         }
+
 
     }
 }
